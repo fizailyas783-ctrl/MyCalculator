@@ -100,7 +100,7 @@ export default function App() {
     
     try {
       const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: [{
           parts: [{
             text: `Explain this mathematical expression and its result step-by-step:
