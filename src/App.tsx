@@ -8,27 +8,17 @@ import {
   Calculator as CalcIcon, 
   History, 
   Sparkles, 
-  Delete, 
-  RotateCcw, 
-  ChevronRight,
-  Info,
   X,
-  Send,
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as math from 'mathjs';
-import { GoogleGenAI } from "@google/genai";
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-// Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
-
-// Initialize Gemini
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 interface CalculationHistory {
   expression: string;
@@ -47,7 +37,6 @@ export default function App() {
   
   const displayRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll display
   useEffect(() => {
     if (displayRef.current) {
       displayRef.current.scrollLeft = displayRef.current.scrollWidth;
@@ -64,7 +53,6 @@ export default function App() {
     } else if (value === 'DEL') {
       setExpression(prev => prev.slice(0, -1));
     } else {
-      // Handle special functions that need parentheses
       const functions = ['sin', 'cos', 'tan', 'log', 'sqrt', 'ln', 'asin', 'acos', 'atan'];
       if (functions.includes(value)) {
         setExpression(prev => prev + value + '(');
@@ -99,19 +87,35 @@ export default function App() {
     setAiExplanation(null);
     
     try {
-      const response = await genAI.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: [{
-          parts: [{
-            text: `Explain this mathematical expression and its result step-by-step:
-            Expression: ${expression}
-            Result: ${result || 'Not calculated yet'}
-            
-            Provide a clear, concise explanation suitable for a student. Use markdown for formatting.`
-          }]
-        }]
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          messages: [
+            {
+              role: 'user',
+              content: `Explain this mathematical expression and its result step-by-step:
+Expression: ${expression}
+Result: ${result || 'Not calculated yet'}
+
+Provide a clear, concise explanation suitable for a student.`
+            }
+          ],
+          max_tokens: 500,
+        }),
       });
-      setAiExplanation(response.text || "No explanation generated.");
+
+      const data = await response.json();
+      
+      if (data.choices && data.choices[0]) {
+        setAiExplanation(data.choices[0].message.content);
+      } else {
+        setAiExplanation("Sorry, I couldn't generate an explanation right now.");
+      }
     } catch (error) {
       console.error("AI Error:", error);
       setAiExplanation("Sorry, I couldn't generate an explanation right now.");
@@ -164,14 +168,12 @@ export default function App() {
     <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Main Calculator Section */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="glass-panel p-6 flex flex-col gap-6 shadow-2xl"
           >
-            {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-blue-400">
                 <CalcIcon size={20} />
@@ -196,7 +198,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Display */}
             <div className="bg-calc-display rounded-2xl p-6 flex flex-col items-end justify-center min-h-[160px] border border-white/5 shadow-inner">
               <div 
                 ref={displayRef}
@@ -209,9 +210,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Keypad */}
             <div className="grid grid-cols-4 gap-3">
-              {/* Scientific Row (Conditional) */}
               <AnimatePresence>
                 {isScientific && (
                   <motion.div 
@@ -233,7 +232,6 @@ export default function App() {
                 )}
               </AnimatePresence>
 
-              {/* Standard Buttons */}
               {buttons.map((btn) => (
                 <button
                   key={btn.label}
@@ -251,7 +249,6 @@ export default function App() {
               ))}
             </div>
 
-            {/* AI Trigger */}
             <button 
               onClick={askAI}
               disabled={aiLoading || (!expression && !result)}
@@ -267,9 +264,7 @@ export default function App() {
           </motion.div>
         </div>
 
-        {/* AI & History Sidebar */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          {/* AI Explanation Panel */}
           <AnimatePresence mode="wait">
             {aiExplanation ? (
               <motion.div
@@ -359,7 +354,7 @@ export default function App() {
                 <div>
                   <h3 className="text-lg font-bold mb-2">AI Math Assistant</h3>
                   <p className="text-sm text-calc-muted max-w-[240px] mx-auto">
-                    Perform calculations and click "Explain with AI" to get step-by-step breakdowns of complex problems.
+                    Perform calculations and click "Explain with AI" to get step-by-step breakdowns.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 gap-2 w-full max-w-[240px]">
@@ -377,26 +372,12 @@ export default function App() {
       </div>
 
       <style>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
       `}</style>
     </div>
   );
