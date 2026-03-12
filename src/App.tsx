@@ -26,6 +26,108 @@ interface CalculationHistory {
   timestamp: number;
 }
 
+// ── BUILT-IN AI EXPLANATION ENGINE ──────────────────────────
+function generateExplanation(expression: string, result: string): string {
+  if (!expression) return "Please enter an expression first.";
+  if (result === 'Error') return "⚠️ This expression has an error. Check for missing brackets or invalid operations.";
+
+  const expr = expression.trim();
+  const res = result.trim();
+  const num = parseFloat(res);
+
+  let explanation = '';
+
+  // Trig functions
+  if (expr.includes('sin(')) {
+    const match = expr.match(/sin\(([^)]+)\)/);
+    const angle = match ? match[1] : '?';
+    explanation += `📐 sin(${angle}): The sine function gives the vertical component of a unit circle point at angle ${angle}. `;
+    if (Math.abs(num) < 0.001) explanation += `sin(${angle}) ≈ 0 because this angle is close to 0° or 180°. `;
+    else if (Math.abs(num - 1) < 0.001) explanation += `sin(${angle}) = 1 — maximum value, occurs at 90°. `;
+  }
+  if (expr.includes('cos(')) {
+    const match = expr.match(/cos\(([^)]+)\)/);
+    const angle = match ? match[1] : '?';
+    explanation += `📐 cos(${angle}): The cosine function gives the horizontal component at angle ${angle}. `;
+  }
+  if (expr.includes('tan(')) {
+    const match = expr.match(/tan\(([^)]+)\)/);
+    const angle = match ? match[1] : '?';
+    explanation += `📐 tan(${angle}): Tangent = sin÷cos. It represents the slope of the angle ${angle}. `;
+  }
+
+  // Logarithms
+  if (expr.includes('log(')) {
+    const match = expr.match(/log\(([^)]+)\)/);
+    const val = match ? match[1] : '?';
+    explanation += `📊 log(${val}): Logarithm base 10. Answers "10 to what power equals ${val}?" Answer: ${res}. `;
+    explanation += `This means 10^${res} ≈ ${val}. `;
+  }
+  if (expr.includes('ln(')) {
+    const match = expr.match(/ln\(([^)]+)\)/);
+    const val = match ? match[1] : '?';
+    explanation += `📊 ln(${val}): Natural logarithm (base e). Answers "e to what power equals ${val}?" Answer: ${res}. `;
+  }
+
+  // Square root
+  if (expr.includes('sqrt(')) {
+    const match = expr.match(/sqrt\(([^)]+)\)/);
+    const val = match ? match[1] : '?';
+    explanation += `🔢 √${val}: Square root of ${val} = ${res}. This means ${res} × ${res} = ${val}. `;
+  }
+
+  // Power
+  if (expr.includes('^')) {
+    const match = expr.match(/([0-9.]+)\^([0-9.]+)/);
+    if (match) {
+      explanation += `🔢 ${match[1]}^${match[2]}: ${match[1]} raised to the power of ${match[2]}. `;
+      explanation += `This means multiplying ${match[1]} by itself ${match[2]} times = ${res}. `;
+    }
+  }
+
+  // Factorial
+  if (expr.includes('!')) {
+    const match = expr.match(/([0-9]+)!/);
+    if (match) {
+      explanation += `🔢 ${match[1]}!: Factorial means multiplying all integers from 1 to ${match[1]}. `;
+      explanation += `${match[1]}! = ${res}. Used in permutations and combinations. `;
+    }
+  }
+
+  // Basic arithmetic
+  if (expr.match(/[+\-*/]/) && !expr.includes('(')) {
+    if (expr.includes('+')) explanation += `➕ Addition: Combining the numbers gives ${res}. `;
+    else if (expr.includes('-')) explanation += `➖ Subtraction: The difference is ${res}. `;
+    else if (expr.includes('*')) explanation += `✖️ Multiplication: The product is ${res}. `;
+    else if (expr.includes('/')) {
+      explanation += `➗ Division: The quotient is ${res}. `;
+      if (num === 1) explanation += `Any number divided by itself equals 1. `;
+    }
+  }
+
+  // Pi and e
+  if (expr.includes('pi')) explanation += `🔵 π (pi) ≈ 3.14159: The ratio of a circle's circumference to its diameter. `;
+  if (expr.includes(' e') || expr === 'e') explanation += `🔵 e ≈ 2.71828: Euler's number, the base of natural logarithm. `;
+
+  // Result analysis
+  if (!isNaN(num)) {
+    if (Number.isInteger(num) && Math.abs(num) < 1000000) {
+      explanation += `\n\n✅ Final Result: ${res} (whole number). `;
+    } else {
+      explanation += `\n\n✅ Final Result: ${res}. `;
+    }
+    if (num < 0) explanation += `The result is negative. `;
+    if (num === 0) explanation += `The result is zero. `;
+    if (Math.abs(num) > 1000000) explanation += `This is a very large number! `;
+  }
+
+  if (!explanation) {
+    explanation = `📌 Expression: ${expr}\n✅ Result: ${res}\n\nThis expression was evaluated using mathematical rules. The final answer is ${res}.`;
+  }
+
+  return explanation.trim();
+}
+
 export default function App() {
   const [expression, setExpression] = useState('');
   const [result, setResult] = useState('');
@@ -80,48 +182,18 @@ export default function App() {
     }
   };
 
-  const askAI = async () => {
+  const askAI = () => {
     if (!expression && !result) return;
     
     setAiLoading(true);
     setAiExplanation(null);
     
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'llama3-8b-8192',
-          messages: [
-            {
-              role: 'user',
-              content: `Explain this mathematical expression and its result step-by-step:
-Expression: ${expression}
-Result: ${result || 'Not calculated yet'}
-
-Provide a clear, concise explanation suitable for a student.`
-            }
-          ],
-          max_tokens: 500,
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data.choices && data.choices[0]) {
-        setAiExplanation(data.choices[0].message.content);
-      } else {
-        setAiExplanation("Sorry, I couldn't generate an explanation right now.");
-      }
-    } catch (error) {
-      console.error("AI Error:", error);
-      setAiExplanation("Sorry, I couldn't generate an explanation right now.");
-    } finally {
+    // Simulate a small delay for better UX
+    setTimeout(() => {
+      const explanation = generateExplanation(expression, result);
+      setAiExplanation(explanation);
       setAiLoading(false);
-    }
+    }, 800);
   };
 
   const buttons = [
